@@ -1,0 +1,5 @@
+{
+  "name": "湖北省十五五重大项目管理监测平台",
+  "description": "湖北省“十五五”农业农村重大项目监测管理平台，包含一张图大屏端和运营管理端，支持项目全生命周期监测与可视化分析。",
+  "requestFramePermissions": ["geolocation"]
+}
