@@ -48,22 +48,22 @@
         </section>
 
         <section class="section flex-1 overflow-hidden flex flex-col">
-          <div class="section-title">市州分布</div>
+          <div class="section-title">{{ currentCity ? currentCity + '县区分布' : '市州分布' }}</div>
           <div class="city-list overflow-y-auto flex-1">
-            <div v-for="city in cityStats" :key="city.name" class="city-item" @click="zoomToCity(city.name)">
-              <span class="city-name">{{ city.name }}</span>
+            <div v-for="item in sidebarStats" :key="item.name" class="city-item" @click="!currentCity && zoomToCity(item.name)">
+              <span class="city-name">{{ item.name }}</span>
               <div class="progress-bar-wrap">
-                <div class="progress-bar" :style="{ width: (city.count / maxCityCount * 100) + '%' }"></div>
+                <div class="progress-bar" :style="{ width: (item.count / (sidebarStats[0]?.count || 1) * 100) + '%' }"></div>
               </div>
-              <span class="city-invest">{{ city.invest }}亿</span>
-              <span class="city-count">{{ city.count }}</span>
+              <span class="city-invest">{{ item.invest.toFixed(1) }}亿</span>
+              <span class="city-count">{{ item.count }}</span>
             </div>
           </div>
         </section>
       </aside>
 
       <!-- Center Map -->
-      <main class="map-container">
+      <main class="map-container" :class="{ 'is-fullscreen': isFullscreen }">
         <div id="map" ref="mapContainer"></div>
         <div v-if="mapError" class="map-error-overlay">
           <div class="error-content">
@@ -78,6 +78,25 @@
             <span :class="{ active: !currentCity }" @click="resetView">湖北省</span>
             <span v-if="currentCity" class="separator">/</span>
             <span v-if="currentCity" class="active">{{ currentCity }}</span>
+          </div>
+        </div>
+
+        <!-- Map Controls -->
+        <div class="map-controls">
+          <button class="control-btn" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏显示'">
+            <span v-if="!isFullscreen">⛶</span>
+            <span v-else>内</span>
+          </button>
+        </div>
+
+        <!-- Legend -->
+        <div class="map-legend">
+          <div class="legend-title">项目筹备分类</div>
+          <div class="legend-items">
+            <div class="legend-item"><span class="dot prep-a"></span>A类 · 优先推进</div>
+            <div class="legend-item"><span class="dot prep-b"></span>B类 · 积极推进</div>
+            <div class="legend-item"><span class="dot prep-c"></span>C类 · 一般推进</div>
+            <div class="legend-item"><span class="dot prep-d"></span>D类 · 储备推进</div>
           </div>
         </div>
 
@@ -146,22 +165,63 @@
       </aside>
     </div>
 
-    <!-- Footer -->
-    <footer class="footer">
-      <div class="footer-item"><span class="dot green"></span>系统运行正常</div>
-      <div class="footer-item"><span class="dot orange"></span>数据更新：2026-03-23</div>
-      <div class="footer-item">数据来源：湖北省农业农村厅</div>
-      <div class="footer-item ml-auto">湖北省"十五五"农业农村重大项目监测管理平台 V2.0</div>
-    </footer>
+    <!-- Footer & Filters -->
+    <div class="bottom-bar">
+      <div class="filter-bar">
+        <div class="filter-item search-box">
+          <span class="filter-label">项目名称</span>
+          <el-input v-model="filters.name" placeholder="输入关键字查询" size="small" clearable />
+        </div>
+        <div class="filter-item">
+          <span class="filter-label">重大专项(一级)</span>
+          <el-select v-model="filters.cat1" size="small" class="w-28">
+            <el-option v-for="opt in cat1Options" :key="opt" :label="opt" :value="opt" />
+          </el-select>
+        </div>
+        <div class="filter-item">
+          <span class="filter-label">重大工程(二级)</span>
+          <el-select v-model="filters.cat2" size="small" class="w-28">
+            <el-option v-for="opt in cat2Options" :key="opt" :label="opt" :value="opt" />
+          </el-select>
+        </div>
+        <div class="filter-item">
+          <span class="filter-label">筹备分类</span>
+          <el-select v-model="filters.prep" size="small" class="w-24">
+            <el-option v-for="opt in prepOptions" :key="opt" :label="opt" :value="opt" />
+          </el-select>
+        </div>
+        <div class="filter-item">
+          <span class="filter-label">建设性质</span>
+          <el-select v-model="filters.nature" size="small" class="w-24">
+            <el-option v-for="opt in natureOptions" :key="opt" :label="opt" :value="opt" />
+          </el-select>
+        </div>
+        <div class="filter-actions">
+          <el-button type="primary" size="small" @click="applyFilters">查询</el-button>
+          <el-button size="small" @click="resetFilters">重置</el-button>
+        </div>
+        <div class="filter-stats ml-auto">
+          显示 <span class="text-blue-400 font-bold">{{ filteredProjects.length }}</span> / {{ projects.length }} 个项目
+        </div>
+      </div>
+
+      <footer class="footer">
+        <div class="footer-item"><span class="dot green"></span>系统运行正常</div>
+        <div class="footer-item"><span class="dot orange"></span>数据更新：2026-03-23</div>
+        <div class="footer-item">数据来源：湖北省农业农村厅</div>
+        <div class="footer-item ml-auto">湖北省"十五五"农业农村重大项目监测管理平台 V2.0</div>
+      </footer>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, onUnmounted, computed, markRaw } from 'vue';
+import { ref, shallowRef, onMounted, onUnmounted, computed, markRaw, watch } from 'vue';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as echarts from 'echarts';
 import { getProjects } from '../api';
+import { Warning } from '@element-plus/icons-vue';
 
 interface Project {
   id: number;
@@ -171,8 +231,10 @@ interface Project {
   lat: number;
   lng: number;
   invest: number;
-  prep: 'A' | 'B' | 'C';
+  prep: 'A' | 'B' | 'C' | 'D';
   cat1: string;
+  cat2: string;
+  nature: string;
   builder: string;
   desc: string;
 }
@@ -230,6 +292,56 @@ const currentDate = ref('');
 const projects = ref<Project[]>([]);
 const currentCity = ref<string | null>(null);
 const selectedProject = ref<Project | null>(null);
+const isFullscreen = ref(false);
+
+const filters = ref({
+  name: '',
+  cat1: '全部',
+  cat2: '全部',
+  prep: '全部',
+  nature: '全部'
+});
+
+const cat1Options = ['全部', '专项A', '专项B', '专项C', '专项D', '专项E', '专项F', '专项G'];
+const cat2Options = ['全部', '工程1', '工程2', '工程3'];
+const prepOptions = ['全部', 'A类', 'B类', 'C类', 'D类'];
+const natureOptions = ['全部', '新建', '改建', '扩建'];
+
+const filteredProjects = computed(() => {
+  return projects.value.filter(p => {
+    const matchName = !filters.value.name || p.name.includes(filters.value.name);
+    const matchCat1 = filters.value.cat1 === '全部' || p.cat1 === filters.value.cat1;
+    const matchCat2 = filters.value.cat2 === '全部' || p.cat2 === filters.value.cat2;
+    const matchPrep = filters.value.prep === '全部' || p.prep + '类' === filters.value.prep;
+    const matchNature = filters.value.nature === '全部' || p.nature === filters.value.nature;
+    return matchName && matchCat1 && matchCat2 && matchPrep && matchNature;
+  });
+});
+
+const currentViewProjects = computed(() => {
+  if (!currentCity.value) return filteredProjects.value;
+  return filteredProjects.value.filter(p => p.city === currentCity.value);
+});
+
+const sidebarStats = computed(() => {
+  const stats: Record<string, any> = {};
+  const key = currentCity.value ? 'county' : 'city';
+  
+  currentViewProjects.value.forEach(p => {
+    const name = p[key as keyof Project] as string;
+    if (!stats[name]) {
+      stats[name] = { name, count: 0, invest: 0 };
+    }
+    stats[name].count++;
+    stats[name].invest += p.invest;
+  });
+  return Object.values(stats).sort((a, b) => b.count - a.count);
+});
+
+watch([filteredProjects, currentCity], () => {
+  updateMapDisplay();
+  initCharts();
+}, { deep: true });
 
 const currentTimeInterval = setInterval(() => {
   const now = new Date();
@@ -239,7 +351,7 @@ const currentTimeInterval = setInterval(() => {
 
 const cityStats = computed<CityStat[]>(() => {
   const map: Record<string, CityStat> = {};
-  projects.value.forEach(p => {
+  filteredProjects.value.forEach(p => {
     if (!map[p.city]) map[p.city] = { name: p.city, count: 0, invest: 0 };
     map[p.city].count++;
     map[p.city].invest = parseFloat((map[p.city].invest + p.invest).toFixed(1));
@@ -251,7 +363,7 @@ const maxCityCount = computed(() => {
   const counts = cityStats.value.map((c: any) => c.count);
   return counts.length ? Math.max(...counts) : 1;
 });
-const topProjects = computed(() => [...projects.value].sort((a, b) => b.invest - a.invest).slice(0, 10));
+const topProjects = computed(() => [...filteredProjects.value].sort((a, b) => b.invest - a.invest).slice(0, 10));
 
 onMounted(async () => {
   window.addEventListener('resize', handleResize);
@@ -261,7 +373,7 @@ onMounted(async () => {
     projects.value = res.data;
     // Re-init markers and charts after data load
     if (map.value && map.value.isStyleLoaded()) {
-      addProjectMarkers();
+      updateMapDisplay();
     }
     initCharts();
   } catch (e) {
@@ -383,7 +495,7 @@ function initMap() {
           console.error('Failed to load Hubei GeoJSON:', err);
         }
 
-        addProjectMarkers();
+        updateMapDisplay();
       });
 
       map.value.on('error', (e: any) => {
@@ -412,26 +524,112 @@ onUnmounted(() => {
   if (map.value) map.value.remove();
 });
 
-function addProjectMarkers() {
+const markers = ref<any[]>([]);
+
+const cityCoords: Record<string, [number, number]> = {
+  '武汉市': [114.30, 30.60],
+  '黄石市': [115.03, 30.19],
+  '十堰市': [110.79, 32.62],
+  '宜昌市': [111.28, 30.69],
+  '襄阳市': [112.12, 32.00],
+  '鄂州市': [114.89, 30.38],
+  '荆门市': [112.19, 31.04],
+  '孝感市': [113.91, 30.92],
+  '荆州市': [112.23, 30.33],
+  '黄冈市': [114.87, 30.45],
+  '咸宁市': [114.32, 29.84],
+  '随州市': [113.38, 31.69],
+  '恩施州': [109.48, 30.28],
+  '仙桃市': [113.45, 30.36],
+  '潜江市': [112.89, 30.42],
+  '天门市': [113.16, 30.66],
+  '神农架': [110.67, 31.74]
+};
+
+function clearMarkers() {
+  markers.value.forEach(m => m.remove());
+  markers.value = [];
+}
+
+function updateMapDisplay() {
   if (!map.value) return;
-  projects.value.forEach(p => {
-    const el = document.createElement('div');
-    el.className = 'marker';
-    el.style.backgroundColor = p.prep === 'A' ? '#00ff9d' : p.prep === 'B' ? '#00d4ff' : '#ff8c42';
-    el.style.width = '10px';
-    el.style.height = '10px';
-    el.style.borderRadius = '50%';
-    el.style.cursor = 'pointer';
-    el.style.boxShadow = `0 0 8px ${el.style.backgroundColor}`;
+  clearMarkers();
 
-    el.addEventListener('click', () => {
-      selectedProject.value = p;
+  if (!currentCity.value) {
+    // Show City Bubbles
+    cityStats.value.forEach(city => {
+      const coords = cityCoords[city.name] || cityCoords[city.name + '市'] || cityCoords[city.name + '州'];
+      if (!coords) return;
+
+      const el = document.createElement('div');
+      el.className = 'city-bubble';
+      const size = Math.max(40, Math.min(80, 40 + (city.count / maxCityCount.value) * 40));
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+      el.innerHTML = `
+        <div class="bubble-content">
+          <div class="name">${city.name}</div>
+          <div class="count">${city.count}个项目</div>
+        </div>
+      `;
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        zoomToCity(city.name);
+      });
+
+      const marker = new maplibregl.Marker(el)
+        .setLngLat(coords)
+        .addTo(map.value!);
+      markers.value.push(marker);
     });
+  } else {
+    // Show Project Markers for current city
+    currentViewProjects.value.forEach(p => {
+      const el = document.createElement('div');
+      el.className = 'marker';
+      const color = p.prep === 'A' ? '#00ff9d' : p.prep === 'B' ? '#00d4ff' : p.prep === 'C' ? '#ff8c42' : '#a855f7';
+      el.style.backgroundColor = color;
+      el.style.width = '12px';
+      el.style.height = '12px';
+      el.style.borderRadius = '50%';
+      el.style.cursor = 'pointer';
+      el.style.boxShadow = `0 0 10px ${color}`;
+      el.style.border = '2px solid #fff';
 
-    new maplibregl.Marker(el)
-      .setLngLat([p.lng, p.lat])
-      .addTo(map.value!);
-  });
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedProject.value = p;
+      });
+
+      const marker = new maplibregl.Marker(el)
+        .setLngLat([p.lng, p.lat])
+        .addTo(map.value!);
+      markers.value.push(marker);
+    });
+  }
+}
+
+function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value;
+  setTimeout(() => {
+    map.value?.resize();
+  }, 300);
+}
+
+function applyFilters() {
+  updateMapDisplay();
+}
+
+function resetFilters() {
+  filters.value = {
+    name: '',
+    cat1: '全部',
+    cat2: '全部',
+    prep: '全部',
+    nature: '全部'
+  };
+  updateMapDisplay();
 }
 
 const catChartInstance = shallowRef<echarts.ECharts | null>(null);
@@ -441,7 +639,7 @@ function initCharts() {
   if (catChart.value) {
     catChartInstance.value = echarts.init(catChart.value);
     const catData: any = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0, G: 0 };
-    projects.value.forEach(p => {
+    currentViewProjects.value.forEach(p => {
       const k = p.cat1.slice(0, 1);
       if (catData[k] !== undefined) catData[k]++;
     });
@@ -458,9 +656,10 @@ function initCharts() {
   if (prepChart.value) {
     prepChartInstance.value = echarts.init(prepChart.value);
     const prepData = [
-      { value: projects.value.filter(p => p.prep === 'A').length, name: 'A类', itemStyle: { color: '#00ff9d' } },
-      { value: projects.value.filter(p => p.prep === 'B').length, name: 'B类', itemStyle: { color: '#00d4ff' } },
-      { value: projects.value.filter(p => p.prep === 'C').length, name: 'C类', itemStyle: { color: '#ff8c42' } },
+      { value: currentViewProjects.value.filter(p => p.prep === 'A').length, name: 'A类', itemStyle: { color: '#00ff9d' } },
+      { value: currentViewProjects.value.filter(p => p.prep === 'B').length, name: 'B类', itemStyle: { color: '#00d4ff' } },
+      { value: currentViewProjects.value.filter(p => p.prep === 'C').length, name: 'C类', itemStyle: { color: '#ff8c42' } },
+      { value: currentViewProjects.value.filter(p => p.prep === 'D').length, name: 'D类', itemStyle: { color: '#a855f7' } },
     ];
     prepChartInstance.value.setOption({
       tooltip: { trigger: 'item' },
@@ -483,10 +682,11 @@ const handleResize = () => {
 
 function zoomToCity(cityName: string) {
   currentCity.value = cityName;
-  // In a real app, you'd have city coordinates
-  if (map.value) {
-    map.value.flyTo({ center: [114.30, 30.60], zoom: 9 });
+  const coords = cityCoords[cityName] || cityCoords[cityName + '市'] || cityCoords[cityName + '州'];
+  if (map.value && coords) {
+    map.value.flyTo({ center: coords, zoom: 9 });
   }
+  updateMapDisplay();
 }
 
 function resetView() {
@@ -494,6 +694,7 @@ function resetView() {
   if (map.value) {
     map.value.flyTo({ center: [112.20, 30.96], zoom: 6.5 });
   }
+  updateMapDisplay();
 }
 
 function resetF() {
@@ -933,13 +1134,164 @@ function resetF() {
   text-align: right;
 }
 
-.footer {
-  height: 30px;
-  background: #030c18;
-  border-top: 1px solid #0e3060;
+.map-container.is-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  border: none;
+  border-radius: 0;
+}
+
+.map-controls {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.control-btn {
+  width: 32px;
+  height: 32px;
+  background: rgba(4, 13, 26, 0.8);
+  border: 1px solid #0e3060;
+  color: #00d4ff;
+  border-radius: 4px;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  justify-content: center;
+  font-size: 18px;
+  transition: all 0.2s;
+}
+
+.control-btn:hover {
+  background: #00d4ff;
+  color: #fff;
+}
+
+.map-legend {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: rgba(4, 13, 26, 0.8);
+  border: 1px solid #0e3060;
+  border-radius: 4px;
+  padding: 10px;
+  z-index: 5;
+}
+
+.legend-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #00d4ff;
+  margin-bottom: 8px;
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.legend-item {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot.prep-a { background: #00ff9d; box-shadow: 0 0 5px #00ff9d; }
+.dot.prep-b { background: #00d4ff; box-shadow: 0 0 5px #00d4ff; }
+.dot.prep-c { background: #ff8c42; box-shadow: 0 0 5px #ff8c42; }
+.dot.prep-d { background: #a855f7; box-shadow: 0 0 5px #a855f7; }
+
+/* City Bubble Styles */
+:deep(.city-bubble) {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.4) 0%, rgba(0, 212, 255, 0.1) 70%);
+  border: 2px solid rgba(0, 212, 255, 0.6);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.4); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(0, 212, 255, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 212, 255, 0); }
+}
+
+:deep(.bubble-content) {
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
+:deep(.bubble-content .name) {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+:deep(.bubble-content .count) {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.bottom-bar {
+  background: #071428;
+  border-top: 1px solid #0e3060;
+  padding: 10px 20px;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(14, 48, 96, 0.5);
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-label {
+  font-size: 12px;
+  color: #7aa5cc;
+  white-space: nowrap;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-stats {
+  font-size: 12px;
+  color: #7aa5cc;
+}
+
+.footer {
+  height: 30px;
+  display: flex;
+  align-items: center;
   gap: 20px;
   font-size: 11px;
   color: #7aa5cc;
@@ -959,4 +1311,6 @@ function resetF() {
 
 .dot.green { background: #00ff9d; }
 .dot.orange { background: #ff8c42; }
+
+.tag-D { background: rgba(168, 85, 247, 0.1); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); }
 </style>
