@@ -136,8 +136,12 @@
               <div class="value">{{ selectedProject.builder }}</div>
             </div>
             <div class="detail-item">
+              <div class="label">责任处室</div>
+              <div class="value">{{ selectedProject.dept }}</div>
+            </div>
+            <div class="detail-item">
               <div class="label">建设内容</div>
-              <div class="value desc">{{ selectedProject.desc }}</div>
+              <div class="value desc">{{ selectedProject.content }}</div>
             </div>
           </div>
         </div>
@@ -253,7 +257,8 @@ interface Project {
   cat2: string;
   nature: string;
   builder: string;
-  desc: string;
+  dept: string;
+  content: string;
 }
 
 interface CityStat {
@@ -322,8 +327,17 @@ const filters = ref({
   nature: '全部'
 });
 
-const cat1Options = ['全部', '专项A', '专项B', '专项C', '专项D', '专项E', '专项F', '专项G'];
-const cat2Options = ['全部', '工程1', '工程2', '工程3'];
+const cat1Options = [
+  '全部',
+  '江汉平原高效优质农产品生产样板区建设重大专项',
+  '粮食增产和农业综合生产能力提升重大专项',
+  '农业产业振兴和产业融合发展重大专项',
+  '农业科技创新和农业新质生产力培育重大专项',
+  '常态化防返贫致贫和强农富农重大专项',
+  '城乡融合发展与宜居宜业和美乡村建设重大专项',
+  '全面深化改革和保障机制建设重大专项'
+];
+const cat2Options = ['全部', '粮油等重要农产品产能提升工程', '重要农产品供保基地建设工程', '农产品精深加工升级工程', '智慧农业应用场景建设工程'];
 const prepOptions = ['全部', 'A类', 'B类', 'C类', 'D类'];
 const stageOptions = ['全部', '筹备中', '已立项', '实施中', '已竣工'];
 const natureOptions = ['全部', '新建', '改建', '扩建'];
