@@ -1,20 +1,13 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 湖北农业农村重大项目监测管理平台
 
-# Run and deploy your AI Studio app
+## 项目简介
+本项目是一个全栈 Web 应用程序，用于监测和管理湖北省“十五五”农业农村重大项目。
 
-This contains everything you need to run your app locally.
+## 永久性开发规则
+1. **地图引擎**：禁止使用 Mapbox。后续所有地图单元必须使用 **天地图**。
+2. **天地图 Token**：`b5de8c428b2dbb5e9894f02ffdc5cff8`。
+3. **技术栈**：Vue 3 + Vite + Tailwind CSS + MapLibre GL JS + ECharts。
 
-View your app in AI Studio: https://ai.studio/apps/2062e4ee-c66c-42a0-926c-6e2fbd7d8af5
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 运行与开发
+- `npm run dev`：启动开发服务器。
+- `npm run build`：构建生产版本。

@@ -29,15 +29,15 @@
           <div class="section-title">总体概览</div>
           <div class="kpi-grid">
             <div class="kpi-card">
-              <div class="kpi-value">369<span>个</span></div>
+              <div class="kpi-value">{{ projects.length }}<span>个</span></div>
               <div class="kpi-label">项目总数</div>
             </div>
             <div class="kpi-card accent-green">
-              <div class="kpi-value">3406<span>亿</span></div>
+              <div class="kpi-value">{{ totalInvest }}<span>亿</span></div>
               <div class="kpi-label">估算总投资</div>
             </div>
             <div class="kpi-card accent-orange">
-              <div class="kpi-value">17<span>个</span></div>
+              <div class="kpi-value">{{ cityCount }}<span>个</span></div>
               <div class="kpi-label">覆盖市州</div>
             </div>
             <div class="kpi-card accent-purple">
@@ -69,7 +69,7 @@
           <div class="error-content">
             <el-icon size="40" color="#ff4d4f"><Warning /></el-icon>
             <h3>地图加载失败</h3>
-            <p>请检查 Mapbox Access Token 是否正确配置。</p>
+            <p>请检查地图配置及网络连接是否正常。</p>
             <el-button type="primary" size="small" @click="retryMap">重试</el-button>
           </div>
         </div>
@@ -118,6 +118,12 @@
               </div>
             </div>
             <div class="detail-item">
+              <div class="label">项目阶段</div>
+              <div class="value">
+                <span class="tag tag-stage">{{ selectedProject.stage }}</span>
+              </div>
+            </div>
+            <div class="detail-item">
               <div class="label">所在地</div>
               <div class="value">{{ selectedProject.city }} · {{ selectedProject.county }}</div>
             </div>
@@ -141,11 +147,15 @@
       <aside class="side-panel right-panel">
         <section class="section">
           <div class="section-title">专项类别分布</div>
-          <div ref="catChart" class="chart-box h-40"></div>
+          <div ref="catChart" class="chart-box h-32"></div>
         </section>
         <section class="section">
           <div class="section-title">筹备分类占比</div>
-          <div ref="prepChart" class="chart-box h-40"></div>
+          <div ref="prepChart" class="chart-box h-32"></div>
+        </section>
+        <section class="section">
+          <div class="section-title">项目阶段统计</div>
+          <div ref="stageChart" class="chart-box h-32"></div>
         </section>
         <section class="section flex-1 overflow-hidden flex flex-col">
           <div class="section-title">投资规模 Top10</div>
@@ -191,6 +201,12 @@
           </el-select>
         </div>
         <div class="filter-item">
+          <span class="filter-label">项目阶段</span>
+          <el-select v-model="filters.stage" size="small" class="w-24">
+            <el-option v-for="opt in stageOptions" :key="opt" :label="opt" :value="opt" />
+          </el-select>
+        </div>
+        <div class="filter-item">
           <span class="filter-label">建设性质</span>
           <el-select v-model="filters.nature" size="small" class="w-24">
             <el-option v-for="opt in natureOptions" :key="opt" :label="opt" :value="opt" />
@@ -232,6 +248,7 @@ interface Project {
   lng: number;
   invest: number;
   prep: 'A' | 'B' | 'C' | 'D';
+  stage: string;
   cat1: string;
   cat2: string;
   nature: string;
@@ -278,7 +295,8 @@ const tiandituStyle: any = {
       type: 'raster',
       source: 'tdt-cva'
     }
-  ]
+  ],
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
 };
 
 const mapContainer = ref<HTMLElement | null>(null);
@@ -286,6 +304,7 @@ const map = shallowRef<any>(null);
 const mapError = ref(false);
 const catChart = ref<HTMLElement | null>(null);
 const prepChart = ref<HTMLElement | null>(null);
+const stageChart = ref<HTMLElement | null>(null);
 
 const currentTime = ref('');
 const currentDate = ref('');
@@ -299,12 +318,14 @@ const filters = ref({
   cat1: '全部',
   cat2: '全部',
   prep: '全部',
+  stage: '全部',
   nature: '全部'
 });
 
 const cat1Options = ['全部', '专项A', '专项B', '专项C', '专项D', '专项E', '专项F', '专项G'];
 const cat2Options = ['全部', '工程1', '工程2', '工程3'];
 const prepOptions = ['全部', 'A类', 'B类', 'C类', 'D类'];
+const stageOptions = ['全部', '筹备中', '已立项', '实施中', '已竣工'];
 const natureOptions = ['全部', '新建', '改建', '扩建'];
 
 const filteredProjects = computed(() => {
@@ -313,8 +334,9 @@ const filteredProjects = computed(() => {
     const matchCat1 = filters.value.cat1 === '全部' || p.cat1 === filters.value.cat1;
     const matchCat2 = filters.value.cat2 === '全部' || p.cat2 === filters.value.cat2;
     const matchPrep = filters.value.prep === '全部' || p.prep + '类' === filters.value.prep;
+    const matchStage = filters.value.stage === '全部' || p.stage === filters.value.stage;
     const matchNature = filters.value.nature === '全部' || p.nature === filters.value.nature;
-    return matchName && matchCat1 && matchCat2 && matchPrep && matchNature;
+    return matchName && matchCat1 && matchCat2 && matchPrep && matchStage && matchNature;
   });
 });
 
@@ -361,8 +383,18 @@ const cityStats = computed<CityStat[]>(() => {
 
 const maxCityCount = computed(() => {
   const counts = cityStats.value.map((c: any) => c.count);
-  return counts.length ? Math.max(...counts) : 1;
+  const max = counts.length ? Math.max(...counts) : 0;
+  return max > 0 ? max : 1;
 });
+
+const totalInvest = computed(() => {
+  return filteredProjects.value.reduce((sum, p) => sum + p.invest, 0).toFixed(0);
+});
+
+const cityCount = computed(() => {
+  return new Set(filteredProjects.value.map(p => p.city)).size;
+});
+
 const topProjects = computed(() => [...filteredProjects.value].sort((a, b) => b.invest - a.invest).slice(0, 10));
 
 onMounted(async () => {
@@ -404,6 +436,9 @@ function initMap() {
 
       map.value.on('load', async () => {
         mapError.value = false;
+        
+        // Initial display update
+        updateMapDisplay();
         
         // Add Hubei Boundary Mask
         try {
@@ -499,7 +534,10 @@ function initMap() {
       });
 
       map.value.on('error', (e: any) => {
-        console.error('Mapbox error:', e.message || (e.error && e.error.message) || 'Unknown map error');
+        const errorMsg = e.message || (e.error && e.error.message) || 'Unknown map error';
+        console.error('Map error:', errorMsg);
+        // If it's the Mapbox token error, we've already tried to fix it by setting glyphs, 
+        // but let's log more info if it persists.
         mapError.value = true;
       });
     } catch (e: any) {
@@ -558,9 +596,16 @@ function updateMapDisplay() {
   if (!currentCity.value) {
     // Show City Bubbles
     cityStats.value.forEach(city => {
-      const coords = cityCoords[city.name] || cityCoords[city.name + '市'] || cityCoords[city.name + '州'];
+      const coords = cityCoords[city.name] || 
+                     cityCoords[city.name.replace(/[市州]/, "")] || 
+                     cityCoords[city.name + "市"] || 
+                     cityCoords[city.name + "州"];
+      
       if (!coords) return;
 
+      const container = document.createElement('div');
+      container.className = 'city-bubble-marker';
+      
       const el = document.createElement('div');
       el.className = 'city-bubble';
       const size = Math.max(40, Math.min(80, 40 + (city.count / maxCityCount.value) * 40));
@@ -578,7 +623,9 @@ function updateMapDisplay() {
         zoomToCity(city.name);
       });
 
-      const marker = new maplibregl.Marker(el)
+      container.appendChild(el);
+
+      const marker = new maplibregl.Marker({ element: container })
         .setLngLat(coords)
         .addTo(map.value!);
       markers.value.push(marker);
@@ -602,7 +649,7 @@ function updateMapDisplay() {
         selectedProject.value = p;
       });
 
-      const marker = new maplibregl.Marker(el)
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat([p.lng, p.lat])
         .addTo(map.value!);
       markers.value.push(marker);
@@ -627,6 +674,7 @@ function resetFilters() {
     cat1: '全部',
     cat2: '全部',
     prep: '全部',
+    stage: '全部',
     nature: '全部'
   };
   updateMapDisplay();
@@ -634,6 +682,7 @@ function resetFilters() {
 
 const catChartInstance = shallowRef<echarts.ECharts | null>(null);
 const prepChartInstance = shallowRef<echarts.ECharts | null>(null);
+const stageChartInstance = shallowRef<echarts.ECharts | null>(null);
 
 function initCharts() {
   if (catChart.value) {
@@ -673,11 +722,50 @@ function initCharts() {
       }]
     });
   }
+
+  if (stageChart.value) {
+    stageChartInstance.value = echarts.init(stageChart.value);
+    const stageData = [
+      { name: '筹备中', value: currentViewProjects.value.filter(p => p.stage === '筹备中').length },
+      { name: '已立项', value: currentViewProjects.value.filter(p => p.stage === '已立项').length },
+      { name: '实施中', value: currentViewProjects.value.filter(p => p.stage === '实施中').length },
+      { name: '已竣工', value: currentViewProjects.value.filter(p => p.stage === '已竣工').length },
+    ];
+
+    stageChartInstance.value.setOption({
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: stageData.map(d => d.name),
+        axisLabel: { color: '#7aa5cc', fontSize: 10 },
+        axisLine: { lineStyle: { color: '#0e3060' } }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: '#7aa5cc', fontSize: 10 },
+        splitLine: { lineStyle: { color: '#0e3060', type: 'dashed' } }
+      },
+      series: [{
+        data: stageData.map(d => d.value),
+        type: 'bar',
+        barWidth: '40%',
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#00d4ff' },
+            { offset: 1, color: '#006896' }
+          ]),
+          borderRadius: [4, 4, 0, 0]
+        }
+      }]
+    });
+  }
 }
 
 const handleResize = () => {
   catChartInstance.value?.resize();
   prepChartInstance.value?.resize();
+  stageChartInstance.value?.resize();
 };
 
 function zoomToCity(cityName: string) {
@@ -713,7 +801,7 @@ function resetF() {
 }
 
 .header {
-  height: 60px;
+  height: 48px;
   background: linear-gradient(180deg, #071e3d, #04122a);
   border-bottom: 1px solid #0e3060;
   display: flex;
@@ -730,10 +818,10 @@ function resetF() {
 }
 
 .logo-icon {
-  font-size: 24px;
+  font-size: 18px;
   background: linear-gradient(135deg, #00d4ff, #006896);
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -741,7 +829,7 @@ function resetF() {
 }
 
 .logo-text h1 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: bold;
   color: #fff;
   margin: 0;
@@ -758,7 +846,7 @@ function resetF() {
 }
 
 .header-center .title {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: bold;
   background: linear-gradient(90deg, #00d4ff, #00ff9d, #00d4ff);
   -webkit-background-clip: text;
@@ -767,17 +855,17 @@ function resetF() {
 }
 
 .header-center .subtitle {
-  font-size: 12px;
+  font-size: 11px;
   color: #7aa5cc;
 }
 
 .clock {
   text-align: right;
-  margin-left: 20px;
+  margin-left: 15px;
 }
 
 .clock .time {
-  font-size: 18px;
+  font-size: 16px;
   color: #00d4ff;
 }
 
@@ -789,9 +877,9 @@ function resetF() {
 .main-content {
   flex: 1;
   display: grid;
-  grid-template-columns: 300px 1fr 300px;
-  gap: 10px;
-  padding: 10px;
+  grid-template-columns: 280px 1fr 280px;
+  gap: 8px;
+  padding: 8px;
   overflow: hidden;
 }
 
@@ -805,7 +893,7 @@ function resetF() {
   background: #071428;
   border: 1px solid #0e3060;
   border-radius: 8px;
-  padding: 15px;
+  padding: 10px;
   position: relative;
 }
 
@@ -820,10 +908,10 @@ function resetF() {
 }
 
 .section-title {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: bold;
   color: #00d4ff;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -847,7 +935,7 @@ function resetF() {
   background: rgba(0, 212, 255, 0.05);
   border: 1px solid rgba(0, 212, 255, 0.2);
   border-radius: 6px;
-  padding: 10px;
+  padding: 8px;
   text-align: center;
   position: relative;
 }
@@ -867,7 +955,7 @@ function resetF() {
 .kpi-card.accent-purple::after { background: #a855f7; }
 
 .kpi-value {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: bold;
   color: #fff;
 }
@@ -887,7 +975,7 @@ function resetF() {
 .city-item {
   display: flex;
   align-items: center;
-  padding: 6px 8px;
+  padding: 4px 8px;
   cursor: pointer;
   transition: all 0.2s;
   border-radius: 4px;
@@ -1083,6 +1171,8 @@ function resetF() {
 .tag-A { background: rgba(0, 255, 157, 0.1); color: #00ff9d; border: 1px solid rgba(0, 255, 157, 0.3); }
 .tag-B { background: rgba(0, 212, 255, 0.1); color: #00d4ff; border: 1px solid rgba(0, 212, 255, 0.3); }
 .tag-C { background: rgba(255, 140, 66, 0.1); color: #ff8c42; border: 1px solid rgba(255, 140, 66, 0.3); }
+.tag-D { background: rgba(168, 85, 247, 0.1); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); }
+.tag-stage { background: rgba(0, 212, 255, 0.1); color: #00d4ff; border: 1px solid rgba(0, 212, 255, 0.3); }
 
 .separator {
   margin: 0 8px;
@@ -1093,7 +1183,7 @@ function resetF() {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .rank {
@@ -1218,15 +1308,32 @@ function resetF() {
 .dot.prep-d { background: #a855f7; box-shadow: 0 0 5px #a855f7; }
 
 /* City Bubble Styles */
+:deep(.city-bubble-marker) {
+  pointer-events: none;
+  z-index: 1000;
+}
+
 :deep(.city-bubble) {
   cursor: pointer;
+  pointer-events: auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle, rgba(0, 212, 255, 0.4) 0%, rgba(0, 212, 255, 0.1) 70%);
-  border: 2px solid rgba(0, 212, 255, 0.6);
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.9) 0%, rgba(0, 104, 150, 0.7) 100%);
+  border: 2px solid #00d4ff;
   border-radius: 50%;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.6);
   animation: pulse 2s infinite;
+  transition: all 0.3s ease;
+  transform-origin: center;
+  color: #fff;
+}
+
+:deep(.city-bubble:hover) {
+  transform: scale(1.1);
+  background: radial-gradient(circle, rgba(0, 255, 157, 0.9) 0%, rgba(0, 104, 150, 0.7) 100%);
+  border-color: #00ff9d;
+  box-shadow: 0 0 30px rgba(0, 255, 157, 0.6);
 }
 
 @keyframes pulse {
@@ -1239,6 +1346,13 @@ function resetF() {
   text-align: center;
   color: #fff;
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 :deep(.bubble-content .name) {
@@ -1254,15 +1368,15 @@ function resetF() {
 .bottom-bar {
   background: #071428;
   border-top: 1px solid #0e3060;
-  padding: 10px 20px;
+  padding: 6px 20px;
 }
 
 .filter-bar {
   display: flex;
   align-items: center;
-  gap: 15px;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
   border-bottom: 1px solid rgba(14, 48, 96, 0.5);
 }
 
@@ -1273,7 +1387,7 @@ function resetF() {
 }
 
 .filter-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #7aa5cc;
   white-space: nowrap;
 }
@@ -1289,10 +1403,10 @@ function resetF() {
 }
 
 .footer {
-  height: 30px;
+  height: 24px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 15px;
   font-size: 11px;
   color: #7aa5cc;
 }
