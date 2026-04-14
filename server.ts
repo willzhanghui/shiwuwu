@@ -102,7 +102,7 @@ async function startServer() {
   const projects: any[] = [];
   const totalProjectCount = 369;
   const preps = ["A", "B", "C", "D"];
-  const stages = ["筹备中", "已立项", "实施中", "已竣工"];
+  const stages = ["谋划", "立项", "实施", "竣工", "验收"];
   const natures = ["新建", "改建", "扩建"];
 
   for (let i = 1; i <= totalProjectCount; i++) {
@@ -138,6 +138,7 @@ async function startServer() {
       phone: "13800138000",
       nature: natures[Math.floor(Math.random() * natures.length)],
       cropType: "无",
+      paidAmount: parseFloat((Math.random() * 5).toFixed(1)),
       lng: parseFloat(lng.toFixed(5)),
       lat: parseFloat(lat.toFixed(5)),
       content: "该项目旨在提升当地农业现代化水平，促进产业融合发展。"
@@ -172,6 +173,9 @@ async function startServer() {
       unit: "宜昌市夷陵区农业农村局",
       supervisor: "宜昌市农业农村局-王某某",
       fundMethod: "直接投资",
+      paidAmount: 1500.00,
+      completionRate: 45,
+      isAccepted: false,
       remark: "本次下达中央投资150万元，自筹资金4556万元"
     },
     {
@@ -193,6 +197,9 @@ async function startServer() {
       unit: "宜昌市点军区农业农村局",
       supervisor: "宜昌市农业农村局-王某某",
       fundMethod: "直接投资",
+      paidAmount: 2000.00,
+      completionRate: 60,
+      isAccepted: false,
       remark: "本次下达中央投资500万元，自筹资金750万元"
     },
     {

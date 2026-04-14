@@ -137,6 +137,7 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="invest" label="总投资(亿)" width="120" sortable />
+                <el-table-column prop="paidAmount" label="已支付(亿)" width="120" sortable />
                 <el-table-column prop="stage" label="阶段" width="100" />
                 <el-table-column label="操作" width="150" fixed="right">
                   <template #default="scope">
@@ -236,8 +237,11 @@
                   <el-table-column prop="name" label="市州" />
                   <el-table-column prop="count" label="项目数" sortable />
                   <el-table-column prop="invest" label="估算总投资(亿)" sortable />
-                  <el-table-column prop="impl" label="实施中" />
-                  <el-table-column prop="plan" label="立项中" />
+                  <el-table-column prop="prep" label="谋划" />
+                  <el-table-column prop="plan" label="立项" />
+                  <el-table-column prop="impl" label="实施" />
+                  <el-table-column prop="comp" label="竣工" />
+                  <el-table-column prop="acc" label="验收" />
                 </el-table>
               </el-tab-pane>
               <el-tab-pane label="按类别统计" name="cat">
@@ -372,6 +376,23 @@
                 <el-table-column prop="unit" label="项目单位" width="200" show-overflow-tooltip />
                 <el-table-column prop="supervisor" label="监管单位" width="180" show-overflow-tooltip />
                 <el-table-column prop="fundMethod" label="资金投向" width="120" />
+                <el-table-column prop="paidAmount" label="已支付(万)" width="120" sortable align="right">
+                  <template #default="scope">
+                    <span class="mono-font">{{ formatNumber(scope.row.paidAmount) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="completionRate" label="完工率" width="150">
+                  <template #default="scope">
+                    <el-progress :percentage="scope.row.completionRate || 0" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="isAccepted" label="验收状态" width="100" align="center">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.isAccepted ? 'success' : 'info'">
+                      {{ scope.row.isAccepted ? '已验收' : '未验收' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="remark" label="备注" width="200" show-overflow-tooltip />
                 <el-table-column label="操作" width="150" fixed="right">
                   <template #default="scope">
@@ -719,10 +740,11 @@
           <el-col :span="12">
             <el-form-item label="项目阶段">
               <el-select v-model="projectForm.stage" placeholder="请选择" class="w-full">
-                <el-option label="筹备中" value="筹备中" />
-                <el-option label="立项中" value="立项中" />
-                <el-option label="实施中" value="实施中" />
-                <el-option label="已竣工" value="已竣工" />
+                <el-option label="谋划" value="谋划" />
+                <el-option label="立项" value="立项" />
+                <el-option label="实施" value="实施" />
+                <el-option label="竣工" value="竣工" />
+                <el-option label="验收" value="验收" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -772,6 +794,13 @@
           <el-col :span="12">
             <el-form-item label="融资需求（亿元）">
               <el-input-number v-model="projectForm.investFinance" :precision="2" :step="0.1" class="w-full" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="资金已支付金额（亿元）">
+              <el-input-number v-model="projectForm.paidAmount" :precision="2" :step="0.1" class="w-full" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -927,6 +956,25 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="资金已支付金额（万元）">
+              <el-input-number v-model="buildingForm.paidAmount" :precision="2" class="w-full" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="是否验收">
+              <el-switch v-model="buildingForm.isAccepted" active-text="已验收" inactive-text="未验收" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <el-form-item label="项目完工率 (%)">
+              <el-slider v-model="buildingForm.completionRate" :step="1" show-input />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <div class="form-section-title">管理信息</div>
         <el-row :gutter="20">
@@ -1060,7 +1108,7 @@ function handleImport(event: Event) {
       city: item['市州'] || item['city'] || '武汉市',
       county: item['县区'] || item['county'] || '',
       type: item['建设类别'] || item['type'] || '其他',
-      status: item['项目状态'] || item['status'] || '立项中',
+      status: item['项目状态'] || item['status'] || '立项',
       invest: Number(item['估算总投资'] || item['invest'] || 0),
       lng: item['经度'] || item['lng'] || '',
       lat: item['纬度'] || item['lat'] || '',
@@ -1192,8 +1240,11 @@ function initAnalysisCharts() {
     const statusPieDom = document.getElementById('status-pie-chart');
     if (statusPieDom) {
       const chart = echarts.init(statusPieDom);
-      const implCount = cityStatData.value.reduce((acc: number, cur: any) => acc + (parseInt(cur.impl) || 0), 0);
+      const prepCount = cityStatData.value.reduce((acc: number, cur: any) => acc + (parseInt(cur.prep) || 0), 0);
       const planCount = cityStatData.value.reduce((acc: number, cur: any) => acc + (parseInt(cur.plan) || 0), 0);
+      const implCount = cityStatData.value.reduce((acc: number, cur: any) => acc + (parseInt(cur.impl) || 0), 0);
+      const compCount = cityStatData.value.reduce((acc: number, cur: any) => acc + (parseInt(cur.comp) || 0), 0);
+      const accCount = cityStatData.value.reduce((acc: number, cur: any) => acc + (parseInt(cur.acc) || 0), 0);
       chart.setOption({
         tooltip: { trigger: 'item' },
         legend: { bottom: '5%', left: 'center' },
@@ -1206,8 +1257,11 @@ function initAnalysisCharts() {
           emphasis: { label: { show: true, fontSize: 20, fontWeight: 'bold' } },
           labelLine: { show: false },
           data: [
-            { value: implCount, name: '实施中' },
-            { value: planCount, name: '立项中' }
+            { value: prepCount, name: '谋划' },
+            { value: planCount, name: '立项' },
+            { value: implCount, name: '实施' },
+            { value: compCount, name: '竣工' },
+            { value: accCount, name: '验收' }
           ]
         }]
       });
@@ -1421,11 +1475,14 @@ const pagedAccounts = computed(() => {
 const cityStatData = computed(() => {
   const map: any = {};
   projects.value.forEach(p => {
-    if (!map[p.city]) map[p.city] = { name: p.city, count: 0, invest: 0, impl: 0, plan: 0 };
+    if (!map[p.city]) map[p.city] = { name: p.city, count: 0, invest: 0, prep: 0, plan: 0, impl: 0, comp: 0, acc: 0 };
     map[p.city].count++;
     map[p.city].invest = parseFloat((map[p.city].invest + p.invest).toFixed(2));
-    if (p.stage === '实施中') map[p.city].impl++;
-    else map[p.city].plan++;
+    if (p.stage === '谋划') map[p.city].prep++;
+    else if (p.stage === '立项') map[p.city].plan++;
+    else if (p.stage === '实施') map[p.city].impl++;
+    else if (p.stage === '竣工') map[p.city].comp++;
+    else if (p.stage === '验收') map[p.city].acc++;
   });
   return Object.values(map).sort((a: any, b: any) => b.count - a.count);
 });
@@ -1667,7 +1724,7 @@ const projectForm = ref({
   cat2: '',
   cat3: '',
   prep: '',
-  stage: '筹备中',
+  stage: '谋划',
   cropType: '无',
   nature: '新建',
   invest: 0,
@@ -1675,6 +1732,7 @@ const projectForm = ref({
   investLocal: 0,
   investSelf: 0,
   investFinance: 0,
+  paidAmount: 0,
   startYear: '2026',
   endYear: '2028',
   builder: '',
@@ -1697,7 +1755,7 @@ function handleAddProject() {
     cat2: '',
     cat3: '',
     prep: '',
-    stage: '筹备中',
+    stage: '谋划',
     cropType: '无',
     nature: '新建',
     invest: 0,
@@ -1705,6 +1763,7 @@ function handleAddProject() {
     investLocal: 0,
     investSelf: 0,
     investFinance: 0,
+    paidAmount: 0,
     startYear: '2026',
     endYear: '2028',
     builder: '',
@@ -1759,6 +1818,9 @@ const buildingForm = ref({
   selfInvest: 0,
   currentCentral: 0,
   currentLocal: 0,
+  paidAmount: 0,
+  completionRate: 0,
+  isAccepted: false,
   content: '',
   unit: '',
   supervisor: '',
@@ -1782,6 +1844,9 @@ function handleAddBuildingProject() {
     selfInvest: 0,
     currentCentral: 0,
     currentLocal: 0,
+    paidAmount: 0,
+    completionRate: 0,
+    isAccepted: false,
     content: '',
     unit: '',
     supervisor: '',
